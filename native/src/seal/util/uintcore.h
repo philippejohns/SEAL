@@ -231,6 +231,9 @@ namespace seal
 #pragma clang diagnostic pop
 #endif
 #endif
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         SEAL_NODISCARD inline int get_significant_bit_count_uint(const std::uint64_t *value, std::size_t uint64_count)
         {
 #ifdef SEAL_DEBUG

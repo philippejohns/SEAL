@@ -34,6 +34,7 @@ namespace seal
             RootType mul_root_scalar(const RootType &r, const ScalarType &s) const;
 
             ValueType guard(const ValueType &a) const;
+
         };
 
         /**
@@ -71,6 +72,7 @@ namespace seal
         @par The order in which the powers of \psi^{-1} used by the IDWT are stored is unnatural but efficient:
         the i-th slot stores the (reverse_bits(i - 1, log_n) + 1)-th power of \psi^{-1}.
         */
+
         template <typename ValueType, typename RootType, typename ScalarType>
         class DWTHandler
         {
@@ -91,6 +93,7 @@ namespace seal
             @param[roots] powers of a root in bit-reversed order
             @param[scalar] an optional scalar that is multiplied to all output values
             */
+
             void transform_to_rev(
                 ValueType *values, int log_n, const RootType *roots, const ScalarType *scalar = nullptr) const
             {
@@ -355,7 +358,7 @@ namespace seal
                 }
             }
 
-        private:
+        //private:
             Arithmetic<ValueType, RootType, ScalarType> arithmetic_;
         };
     } // namespace util

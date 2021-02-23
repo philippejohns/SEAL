@@ -27,26 +27,41 @@ namespace seal
             Arithmetic(const Modulus &modulus) : modulus_(modulus), two_times_modulus_(modulus.value() << 1)
             {}
 
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
             inline std::uint64_t add(const std::uint64_t &a, const std::uint64_t &b) const
             {
                 return a + b;
             }
 
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
             inline std::uint64_t sub(const std::uint64_t &a, const std::uint64_t &b) const
             {
                 return a + two_times_modulus_ - b;
             }
 
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
             inline std::uint64_t mul_root(const std::uint64_t &a, const MultiplyUIntModOperand &r) const
             {
                 return multiply_uint_mod_lazy(a, r, modulus_);
             }
 
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
             inline std::uint64_t mul_scalar(const std::uint64_t &a, const MultiplyUIntModOperand &s) const
             {
                 return multiply_uint_mod_lazy(a, s, modulus_);
             }
 
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
             inline MultiplyUIntModOperand mul_root_scalar(
                 const MultiplyUIntModOperand &r, const MultiplyUIntModOperand &s) const
             {
@@ -55,6 +70,9 @@ namespace seal
                 return result;
             }
 
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
             inline std::uint64_t guard(const std::uint64_t &a) const
             {
                 return a - (two_times_modulus_ &

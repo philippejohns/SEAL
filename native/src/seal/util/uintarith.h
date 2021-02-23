@@ -18,6 +18,9 @@ namespace seal
     namespace util
     {
         template <typename T, typename S, typename = std::enable_if_t<is_uint64_v<T, S>>>
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         SEAL_NODISCARD inline unsigned char add_uint64_generic(
             T operand1, S operand2, unsigned char carry, unsigned long long *result)
         {
@@ -33,6 +36,9 @@ namespace seal
         }
 
         template <typename T, typename S, typename = std::enable_if_t<is_uint64_v<T, S>>>
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         SEAL_NODISCARD inline unsigned char add_uint64(
             T operand1, S operand2, unsigned char carry, unsigned long long *result)
         {
@@ -40,6 +46,9 @@ namespace seal
         }
 
         template <typename T, typename S, typename R, typename = std::enable_if_t<is_uint64_v<T, S, R>>>
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         SEAL_NODISCARD inline unsigned char add_uint64(T operand1, S operand2, R *result)
         {
             *result = operand1 + operand2;
@@ -67,6 +76,9 @@ namespace seal
             return add_uint64(operand1[1], operand2[1], carry, result + 1);
         }
 
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         inline unsigned char add_uint(
             const std::uint64_t *operand1, std::size_t operand1_uint64_count, const std::uint64_t *operand2,
             std::size_t operand2_uint64_count, unsigned char carry, std::size_t result_uint64_count,
@@ -109,6 +121,9 @@ namespace seal
             return carry;
         }
 
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         inline unsigned char add_uint(
             const std::uint64_t *operand1, const std::uint64_t *operand2, std::size_t uint64_count,
             std::uint64_t *result)
@@ -143,7 +158,9 @@ namespace seal
             }
             return carry;
         }
-
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         inline unsigned char add_uint(
             const std::uint64_t *operand1, std::size_t uint64_count, std::uint64_t operand2, std::uint64_t *result)
         {
@@ -175,6 +192,9 @@ namespace seal
         }
 
         template <typename T, typename S, typename = std::enable_if_t<is_uint64_v<T, S>>>
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         SEAL_NODISCARD inline unsigned char sub_uint64_generic(
             T operand1, S operand2, unsigned char borrow, unsigned long long *result)
         {
@@ -190,6 +210,9 @@ namespace seal
         }
 
         template <typename T, typename S, typename = std::enable_if_t<is_uint64_v<T, S>>>
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         SEAL_NODISCARD inline unsigned char sub_uint64(
             T operand1, S operand2, unsigned char borrow, unsigned long long *result)
         {
@@ -197,12 +220,18 @@ namespace seal
         }
 
         template <typename T, typename S, typename R, typename = std::enable_if_t<is_uint64_v<T, S, R>>>
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         SEAL_NODISCARD inline unsigned char sub_uint64(T operand1, S operand2, R *result)
         {
             *result = operand1 - operand2;
             return static_cast<unsigned char>(operand2 > operand1);
         }
 
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         inline unsigned char sub_uint(
             const std::uint64_t *operand1, std::size_t operand1_uint64_count, const std::uint64_t *operand2,
             std::size_t operand2_uint64_count, unsigned char borrow, std::size_t result_uint64_count,
@@ -229,6 +258,9 @@ namespace seal
             return borrow;
         }
 
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         inline unsigned char sub_uint(
             const std::uint64_t *operand1, const std::uint64_t *operand2, std::size_t uint64_count,
             std::uint64_t *result)
@@ -264,6 +296,9 @@ namespace seal
             return borrow;
         }
 
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         inline unsigned char sub_uint(
             const std::uint64_t *operand1, std::size_t uint64_count, std::uint64_t operand2, std::uint64_t *result)
         {
@@ -458,6 +493,9 @@ namespace seal
             }
         }
 
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         inline void left_shift_uint128(const std::uint64_t *operand, int shift_amount, std::uint64_t *result)
         {
             const std::size_t bits_per_uint64_sz = static_cast<std::size_t>(bits_per_uint64);
@@ -503,6 +541,9 @@ namespace seal
             }
         }
 
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         inline void right_shift_uint128(const std::uint64_t *operand, int shift_amount, std::uint64_t *result)
         {
             const std::size_t bits_per_uint64_sz = static_cast<std::size_t>(bits_per_uint64);
@@ -773,6 +814,9 @@ namespace seal
         }
 
         template <typename T, typename S, typename = std::enable_if_t<is_uint64_v<T, S>>>
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         inline void multiply_uint64_generic(T operand1, S operand2, unsigned long long *result128)
         {
 #ifdef SEAL_DEBUG
@@ -798,12 +842,18 @@ namespace seal
         }
 
         template <typename T, typename S, typename = std::enable_if_t<is_uint64_v<T, S>>>
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         inline void multiply_uint64(T operand1, S operand2, unsigned long long *result128)
         {
             SEAL_MULTIPLY_UINT64(operand1, operand2, result128);
         }
 
         template <typename T, typename S, typename = std::enable_if_t<is_uint64_v<T, S>>>
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         inline void multiply_uint64_hw64_generic(T operand1, S operand2, unsigned long long *hw64)
         {
 #ifdef SEAL_DEBUG
@@ -828,6 +878,9 @@ namespace seal
         }
 
         template <typename T, typename S, typename = std::enable_if_t<is_uint64_v<T, S>>>
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         inline void multiply_uint64_hw64(T operand1, S operand2, unsigned long long *hw64)
         {
             SEAL_MULTIPLY_UINT64_HW64(operand1, operand2, hw64);
@@ -967,10 +1020,15 @@ namespace seal
             set_uint(numerator, uint64_count, remainder);
             divide_uint_inplace(remainder, denominator, uint64_count, quotient, pool);
         }
-
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         void divide_uint128_uint64_inplace_generic(
             std::uint64_t *numerator, std::uint64_t denominator, std::uint64_t *quotient);
 
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         inline void divide_uint128_inplace(std::uint64_t *numerator, std::uint64_t denominator, std::uint64_t *quotient)
         {
 #ifdef SEAL_DEBUG

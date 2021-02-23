@@ -165,6 +165,9 @@ namespace seal
         @param[in] input Should be at most 128-bit.
         */
         template <typename T, typename = std::enable_if_t<is_uint64_v<T>>>
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         SEAL_NODISCARD inline std::uint64_t barrett_reduce_128(const T *input, const Modulus &modulus)
         {
 #ifdef SEAL_DEBUG
@@ -237,6 +240,9 @@ namespace seal
         Returns (operand1 * operand2) mod modulus.
         Correctness: Follows the condition of barret_reduce_128.
         */
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         SEAL_NODISCARD inline std::uint64_t multiply_uint_mod(
             std::uint64_t operand1, std::uint64_t operand2, const Modulus &modulus)
         {
@@ -261,6 +267,9 @@ namespace seal
             std::uint64_t operand;
             std::uint64_t quotient;
 
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
             void set_quotient(const Modulus &modulus)
             {
 #ifdef SEAL_DEBUG
@@ -275,6 +284,9 @@ namespace seal
                 quotient = wide_quotient[0];
             }
 
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
             void set(std::uint64_t new_operand, const Modulus &modulus)
             {
 #ifdef SEAL_DEBUG
@@ -293,6 +305,9 @@ namespace seal
         This is a highly-optimized variant of Barrett reduction.
         Correctness: modulus should be at most 63-bit, and y must be less than modulus.
         */
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         SEAL_NODISCARD inline std::uint64_t multiply_uint_mod(
             std::uint64_t x, MultiplyUIntModOperand y, const Modulus &modulus)
         {
@@ -314,6 +329,9 @@ namespace seal
         This is a highly-optimized variant of Barrett reduction and reduce to [0, 2 * modulus - 1].
         Correctness: modulus should be at most 63-bit, and y must be less than modulus.
         */
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         SEAL_NODISCARD inline std::uint64_t multiply_uint_mod_lazy(
             std::uint64_t x, MultiplyUIntModOperand y, const Modulus &modulus)
         {

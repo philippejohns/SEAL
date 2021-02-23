@@ -112,6 +112,9 @@ namespace seal
         /**
         Returns the value of the current Modulus.
         */
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         SEAL_NODISCARD inline std::uint64_t value() const noexcept
         {
             return value_;
@@ -122,6 +125,9 @@ namespace seal
         The first two components of the Barrett ratio are the floor of 2^128/value,
         and the third component is the remainder.
         */
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         SEAL_NODISCARD inline auto &const_ratio() const noexcept
         {
             return const_ratio_;

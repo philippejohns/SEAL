@@ -429,6 +429,9 @@ namespace seal
                                                                 static_cast<std::size_t>(bit_count));
         }
 
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         inline void get_msb_index_generic(unsigned long *result, std::uint64_t value)
         {
 #ifdef SEAL_DEBUG
@@ -453,6 +456,9 @@ namespace seal
             *result = deBruijnTable64[((value - (value >> 1)) * std::uint64_t(0x07EDD5E59A4E28C2)) >> 58];
         }
 
+#ifdef __CUDA_ARCH__
+            __host__ __device__
+#endif
         SEAL_NODISCARD inline int get_significant_bit_count(std::uint64_t value)
         {
             if (value == 0)
