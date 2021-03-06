@@ -79,11 +79,11 @@ namespace seal
             ntt_handler_ = NTTHandler(mod_arith_lazy_);
 
             //added to allocate on device
-            //int log_n = coeff_count_power;
-            //size_t n = size_t(1) << log_n;
+            int log_n = coeff_count_power;
+            size_t n = size_t(1) << log_n;
 
-            //cudaMalloc(&root_powers_device, n * sizeof(MultiplyUIntModOperand)); //note: this doesnt get destroyed yet...
-            //cudaMemcpy(root_powers_device, root_powers_.get(), n * sizeof(MultiplyUIntModOperand), cudaMemcpyHostToDevice); 
+            cudaMalloc(&root_powers_device, n * sizeof(MultiplyUIntModOperand)); //note: this doesnt get destroyed yet...
+            cudaMemcpy(root_powers_device, root_powers_.get(), n * sizeof(MultiplyUIntModOperand), cudaMemcpyHostToDevice); 
         }
 
         class NTTTablesCreateIter
@@ -183,7 +183,7 @@ namespace seal
         #define ARITH_SH Arithmetic<std::uint64_t, MultiplyUIntModOperand, MultiplyUIntModOperand>
 
         __global__ void transform_to_rev_kernel(ARITH_SH arithmetic_,
-                std::uint64_t *values, const MultiplyUIntModOperand *roots, size_t gap, size_t m)
+                std::uint64_t * __restrict__ values, const MultiplyUIntModOperand * __restrict__ roots, size_t gap, size_t m)
         {
             // registers to hold temporary values
             MultiplyUIntModOperand r;
@@ -196,25 +196,62 @@ namespace seal
 
             roots += (m-1);
 
-            for (std::size_t i = 0; i < m; i++)
-            {
+            std::size_t i = threadIdx.x; //m
+            std::size_t j = blockIdx.x; //gap
+
+            //for (std::size_t i = 0; i < m; i++)
+            //{
                 offset = i * (gap << 1);
                 r = roots[i+1];
                 x = values + offset;
                 y = x + gap;
-                for (std::size_t j = 0; j < gap; j++)
-                {
+                //for (std::size_t j = 0; j < gap; j++)
+                //{
                     u = arithmetic_.guard(x[j]);
                     v = arithmetic_.mul_root(y[j], r);
                     x[j] = arithmetic_.add(u, v);
                     y[j] = arithmetic_.sub(u, v);
-                }
-            }
+                //}
+            //}
+        }
+
+        __global__ void transform_to_rev_kernel2(ARITH_SH arithmetic_,
+                std::uint64_t * __restrict__ values, const MultiplyUIntModOperand * __restrict__ roots, size_t gap, size_t m)
+        {
+            // registers to hold temporary values
+            MultiplyUIntModOperand r;
+            std::uint64_t u;
+            std::uint64_t v;
+            // pointers for faster indexing
+            std::uint64_t *x = nullptr;
+            std::uint64_t *y = nullptr;
+            std::size_t offset = 0;
+
+            roots += (m-1);
+
+            std::size_t j = threadIdx.x; //gap
+            std::size_t i = blockIdx.x; //m
+
+            //for (std::size_t i = 0; i < m; i++)
+            //{
+                offset = i * (gap << 1);
+                r = roots[i+1];
+                x = values + offset;
+                y = x + gap;
+                //for (std::size_t j = 0; j < gap; j++)
+                //{
+                    u = arithmetic_.guard(x[j]);
+                    v = arithmetic_.mul_root(y[j], r);
+                    x[j] = arithmetic_.add(u, v);
+                    y[j] = arithmetic_.sub(u, v);
+                //}
+            //}
         }
 
            
         void ntt_negacyclic_harvey_lazy(CoeffIter operand, const NTTTables &tables)
         {
+            //this is the original function call
             // tables.ntt_handler().transform_to_rev(
             //     operand.ptr(), tables.coeff_count_power(), tables.get_from_root_powers());
 
@@ -226,24 +263,31 @@ namespace seal
             MultiplyUIntModOperand *roots_device;
 
             cudaMalloc(&values_device, n * sizeof(std::uint64_t));
-            cudaMalloc(&roots_device, n * sizeof(MultiplyUIntModOperand));
+            //cudaMalloc(&roots_device, n * sizeof(MultiplyUIntModOperand));
 
             cudaMemcpy(values_device, operand.ptr(), n * sizeof(std::uint64_t), cudaMemcpyHostToDevice);
-            cudaMemcpy(roots_device, tables.get_from_root_powers(), n * sizeof(MultiplyUIntModOperand), cudaMemcpyHostToDevice);
+            //cudaMemcpy(roots_device, tables.get_from_root_powers(), n * sizeof(MultiplyUIntModOperand), cudaMemcpyHostToDevice);
 
             std::size_t gap = n >> 1;
             std::size_t m = 1;
 
+            //std::cout << "START" << std::endl;
+            for (; m <= (n >> 8); m <<= 1)
+            {
+                //std::cout << "m: " << m << ", gap: " << gap << std::endl;
+                transform_to_rev_kernel<<<gap, m>>>(tables.ntt_handler().arithmetic_, values_device, tables.get_from_root_powers_device(), gap, m);
+                gap >>= 1;
+            }
             for (; m <= (n >> 1); m <<= 1)
             {
-                transform_to_rev_kernel<<<1, 1>>>(tables.ntt_handler().arithmetic_, values_device, roots_device, gap, m);
+                //std::cout << "m: " << m << ", gap: " << gap << std::endl;
+                transform_to_rev_kernel2<<<m, gap>>>(tables.ntt_handler().arithmetic_, values_device, tables.get_from_root_powers_device(), gap, m);
                 gap >>= 1;
             }
 
-
             cudaMemcpy(operand.ptr(), values_device, n * sizeof(std::uint64_t), cudaMemcpyDeviceToHost);
             cudaFree(values_device);
-            cudaFree(roots_device);
+           // cudaFree(roots_device);
 
         }
 
