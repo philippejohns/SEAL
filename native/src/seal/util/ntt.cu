@@ -77,6 +77,13 @@ namespace seal
 
             mod_arith_lazy_ = ModArithLazy(modulus_);
             ntt_handler_ = NTTHandler(mod_arith_lazy_);
+
+            //added to allocate on device
+            //int log_n = coeff_count_power;
+            //size_t n = size_t(1) << log_n;
+
+            //cudaMalloc(&root_powers_device, n * sizeof(MultiplyUIntModOperand)); //note: this doesnt get destroyed yet...
+            //cudaMemcpy(root_powers_device, root_powers_.get(), n * sizeof(MultiplyUIntModOperand), cudaMemcpyHostToDevice); 
         }
 
         class NTTTablesCreateIter
@@ -171,261 +178,41 @@ namespace seal
             tables = allocate(iter, modulus.size(), pool);
         }
 
-        __global__ void transform_to_rev_kernel(Arithmetic<std::uint64_t, MultiplyUIntModOperand, MultiplyUIntModOperand> arithmetic_,
-                std::uint64_t *values, int log_n, const MultiplyUIntModOperand *roots, const MultiplyUIntModOperand *scalar)
+        #include <cstdio>
+        //shorthand for the Arithmetic template classs to keep the following function header short
+        #define ARITH_SH Arithmetic<std::uint64_t, MultiplyUIntModOperand, MultiplyUIntModOperand>
+
+        __global__ void transform_to_rev_kernel(ARITH_SH arithmetic_,
+                std::uint64_t *values, const MultiplyUIntModOperand *roots, size_t gap, size_t m)
+        {
+            // registers to hold temporary values
+            MultiplyUIntModOperand r;
+            std::uint64_t u;
+            std::uint64_t v;
+            // pointers for faster indexing
+            std::uint64_t *x = nullptr;
+            std::uint64_t *y = nullptr;
+            std::size_t offset = 0;
+
+            roots += (m-1);
+
+            for (std::size_t i = 0; i < m; i++)
             {
-                // constant transform size
-                size_t n = size_t(1) << log_n;
-                // registers to hold temporary values
-                MultiplyUIntModOperand r;
-                std::uint64_t u;
-                std::uint64_t v;
-                // pointers for faster indexing
-                std::uint64_t *x = nullptr;
-                std::uint64_t *y = nullptr;
-                // variables for indexing
-                std::size_t gap = n >> 1;
-                std::size_t m = 1;
-
-                for (; m < (n >> 1); m <<= 1)
+                offset = i * (gap << 1);
+                r = roots[i+1];
+                x = values + offset;
+                y = x + gap;
+                for (std::size_t j = 0; j < gap; j++)
                 {
-                    std::size_t offset = 0;
-                    if (gap < 4)
-                    {
-                        for (std::size_t i = 0; i < m; i++)
-                        {
-                            r = *++roots;
-                            x = values + offset;
-                            y = x + gap;
-                            for (std::size_t j = 0; j < gap; j++)
-                            {
-                                u = arithmetic_.guard(*x);
-                                v = arithmetic_.mul_root(*y, r);
-                                *x++ = arithmetic_.add(u, v);
-                                *y++ = arithmetic_.sub(u, v);
-                            }
-                            offset += gap << 1;
-                        }
-                    }
-                    else
-                    {
-                        for (std::size_t i = 0; i < m; i++)
-                        {
-                            r = *++roots;
-                            x = values + offset;
-                            y = x + gap;
-                            for (std::size_t j = 0; j < gap; j += 4)
-                            {
-                                u = arithmetic_.guard(*x);
-                                v = arithmetic_.mul_root(*y, r);
-                                *x++ = arithmetic_.add(u, v);
-                                *y++ = arithmetic_.sub(u, v);
-
-                                u = arithmetic_.guard(*x);
-                                v = arithmetic_.mul_root(*y, r);
-                                *x++ = arithmetic_.add(u, v);
-                                *y++ = arithmetic_.sub(u, v);
-
-                                u = arithmetic_.guard(*x);
-                                v = arithmetic_.mul_root(*y, r);
-                                *x++ = arithmetic_.add(u, v);
-                                *y++ = arithmetic_.sub(u, v);
-
-                                u = arithmetic_.guard(*x);
-                                v = arithmetic_.mul_root(*y, r);
-                                *x++ = arithmetic_.add(u, v);
-                                *y++ = arithmetic_.sub(u, v);
-                            }
-                            offset += gap << 1;
-                        }
-                    }
-                    gap >>= 1;
-                }
-
-                if (scalar != nullptr)
-                {
-                    MultiplyUIntModOperand scaled_r;
-                    for (std::size_t i = 0; i < m; i++)
-                    {
-                        r = *++roots;
-                        scaled_r = arithmetic_.mul_root_scalar(r, *scalar);
-                        u = arithmetic_.mul_scalar(arithmetic_.guard(values[0]), *scalar);
-                        v = arithmetic_.mul_root(values[1], scaled_r);
-                        values[0] = arithmetic_.add(u, v);
-                        values[1] = arithmetic_.sub(u, v);
-                        values += 2;
-                    }
-                }
-                else
-                {
-                    for (std::size_t i = 0; i < m; i++)
-                    {
-                        r = *++roots;
-                        u = arithmetic_.guard(values[0]);
-                        v = arithmetic_.mul_root(values[1], r);
-                        values[0] = arithmetic_.add(u, v);
-                        values[1] = arithmetic_.sub(u, v);
-                        values += 2;
-                    }
+                    u = arithmetic_.guard(x[j]);
+                    v = arithmetic_.mul_root(y[j], r);
+                    x[j] = arithmetic_.add(u, v);
+                    y[j] = arithmetic_.sub(u, v);
                 }
             }
+        }
 
-            __global__ void transform_from_rev_kernel(Arithmetic<std::uint64_t, MultiplyUIntModOperand, MultiplyUIntModOperand> arithmetic_,
-                std::uint64_t *values, int log_n, const MultiplyUIntModOperand *roots, const MultiplyUIntModOperand *scalar)
-            {
-                // constant transform size
-                size_t n = size_t(1) << log_n;
-                // registers to hold temporary values
-                MultiplyUIntModOperand r;
-                std::uint64_t u;
-                std::uint64_t v;
-                // pointers for faster indexing
-                std::uint64_t *x = nullptr;
-                std::uint64_t *y = nullptr;
-                // variables for indexing
-                std::size_t gap = 1;
-                std::size_t m = n >> 1;
-
-                for (; m > 1; m >>= 1)
-                {
-                    std::size_t offset = 0;
-                    if (gap < 4)
-                    {
-                        for (std::size_t i = 0; i < m; i++)
-                        {
-                            r = *++roots;
-                            x = values + offset;
-                            y = x + gap;
-                            for (std::size_t j = 0; j < gap; j++)
-                            {
-                                u = *x;
-                                v = *y;
-                                *x++ = arithmetic_.guard(arithmetic_.add(u, v));
-                                *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
-                            }
-                            offset += gap << 1;
-                        }
-                    }
-                    else
-                    {
-                        for (std::size_t i = 0; i < m; i++)
-                        {
-                            r = *++roots;
-                            x = values + offset;
-                            y = x + gap;
-                            for (std::size_t j = 0; j < gap; j += 4)
-                            {
-                                u = *x;
-                                v = *y;
-                                *x++ = arithmetic_.guard(arithmetic_.add(u, v));
-                                *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
-
-                                u = *x;
-                                v = *y;
-                                *x++ = arithmetic_.guard(arithmetic_.add(u, v));
-                                *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
-
-                                u = *x;
-                                v = *y;
-                                *x++ = arithmetic_.guard(arithmetic_.add(u, v));
-                                *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
-
-                                u = *x;
-                                v = *y;
-                                *x++ = arithmetic_.guard(arithmetic_.add(u, v));
-                                *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
-                            }
-                            offset += gap << 1;
-                        }
-                    }
-                    gap <<= 1;
-                }
-
-                if (scalar != nullptr)
-                {
-                    r = *++roots;
-                    MultiplyUIntModOperand scaled_r = arithmetic_.mul_root_scalar(r, *scalar);
-                    x = values;
-                    y = x + gap;
-                    if (gap < 4)
-                    {
-                        for (std::size_t j = 0; j < gap; j += 4)
-                        {
-                            u = arithmetic_.guard(*x);
-                            v = *y;
-                            *x++ = arithmetic_.mul_scalar(arithmetic_.guard(arithmetic_.add(u, v)), *scalar);
-                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), scaled_r);
-                        }
-                    }
-                    else
-                    {
-                        for (std::size_t j = 0; j < gap; j += 4)
-                        {
-                            u = arithmetic_.guard(*x);
-                            v = *y;
-                            *x++ = arithmetic_.mul_scalar(arithmetic_.guard(arithmetic_.add(u, v)), *scalar);
-                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), scaled_r);
-
-                            u = arithmetic_.guard(*x);
-                            v = *y;
-                            *x++ = arithmetic_.mul_scalar(arithmetic_.guard(arithmetic_.add(u, v)), *scalar);
-                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), scaled_r);
-
-                            u = arithmetic_.guard(*x);
-                            v = *y;
-                            *x++ = arithmetic_.mul_scalar(arithmetic_.guard(arithmetic_.add(u, v)), *scalar);
-                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), scaled_r);
-
-                            u = arithmetic_.guard(*x);
-                            v = *y;
-                            *x++ = arithmetic_.mul_scalar(arithmetic_.guard(arithmetic_.add(u, v)), *scalar);
-                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), scaled_r);
-                        }
-                    }
-                }
-                else
-                {
-                    r = *++roots;
-                    x = values;
-                    y = x + gap;
-                    if (gap < 4)
-                    {
-                        for (std::size_t j = 0; j < gap; j += 4)
-                        {
-                            u = *x;
-                            v = *y;
-                            *x++ = arithmetic_.guard(arithmetic_.add(u, v));
-                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
-                        }
-                    }
-                    else
-                    {
-                        for (std::size_t j = 0; j < gap; j += 4)
-                        {
-                            u = *x;
-                            v = *y;
-                            *x++ = arithmetic_.guard(arithmetic_.add(u, v));
-                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
-
-                            u = *x;
-                            v = *y;
-                            *x++ = arithmetic_.guard(arithmetic_.add(u, v));
-                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
-
-                            u = *x;
-                            v = *y;
-                            *x++ = arithmetic_.guard(arithmetic_.add(u, v));
-                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
-
-                            u = *x;
-                            v = *y;
-                            *x++ = arithmetic_.guard(arithmetic_.add(u, v));
-                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
-                        }
-                    }
-                }
-            }
-
+           
         void ntt_negacyclic_harvey_lazy(CoeffIter operand, const NTTTables &tables)
         {
             // tables.ntt_handler().transform_to_rev(
@@ -443,8 +230,16 @@ namespace seal
 
             cudaMemcpy(values_device, operand.ptr(), n * sizeof(std::uint64_t), cudaMemcpyHostToDevice);
             cudaMemcpy(roots_device, tables.get_from_root_powers(), n * sizeof(MultiplyUIntModOperand), cudaMemcpyHostToDevice);
-            
-            transform_to_rev_kernel<<<1, 1>>>(tables.ntt_handler().arithmetic_, values_device, log_n, roots_device, nullptr);
+
+            std::size_t gap = n >> 1;
+            std::size_t m = 1;
+
+            for (; m <= (n >> 1); m <<= 1)
+            {
+                transform_to_rev_kernel<<<1, 1>>>(tables.ntt_handler().arithmetic_, values_device, roots_device, gap, m);
+                gap >>= 1;
+            }
+
 
             cudaMemcpy(operand.ptr(), values_device, n * sizeof(std::uint64_t), cudaMemcpyDeviceToHost);
             cudaFree(values_device);
@@ -582,3 +377,162 @@ namespace seal
 
     } // namespace util
 } // namespace seal
+
+
+
+
+ // __global__ void transform_from_rev_kernel(Arithmetic<std::uint64_t, MultiplyUIntModOperand, MultiplyUIntModOperand> arithmetic_,
+ //                std::uint64_t *values, int log_n, const MultiplyUIntModOperand *roots, const MultiplyUIntModOperand *scalar)
+ //            {
+ //                // constant transform size
+ //                size_t n = size_t(1) << log_n;
+ //                // registers to hold temporary values
+ //                MultiplyUIntModOperand r;
+ //                std::uint64_t u;
+ //                std::uint64_t v;
+ //                // pointers for faster indexing
+ //                std::uint64_t *x = nullptr;
+ //                std::uint64_t *y = nullptr;
+ //                // variables for indexing
+ //                std::size_t gap = 1;
+ //                std::size_t m = n >> 1;
+
+ //                for (; m > 1; m >>= 1)
+ //                {
+ //                    std::size_t offset = 0;
+ //                    if (gap < 4)
+ //                    {
+ //                        for (std::size_t i = 0; i < m; i++)
+ //                        {
+ //                            r = *++roots;
+ //                            x = values + offset;
+ //                            y = x + gap;
+ //                            for (std::size_t j = 0; j < gap; j++)
+ //                            {
+ //                                u = *x;
+ //                                v = *y;
+ //                                *x++ = arithmetic_.guard(arithmetic_.add(u, v));
+ //                                *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
+ //                            }
+ //                            offset += gap << 1;
+ //                        }
+ //                    }
+ //                    else
+ //                    {
+ //                        for (std::size_t i = 0; i < m; i++)
+ //                        {
+ //                            r = *++roots;
+ //                            x = values + offset;
+ //                            y = x + gap;
+ //                            for (std::size_t j = 0; j < gap; j += 4)
+ //                            {
+ //                                u = *x;
+ //                                v = *y;
+ //                                *x++ = arithmetic_.guard(arithmetic_.add(u, v));
+ //                                *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
+
+ //                                u = *x;
+ //                                v = *y;
+ //                                *x++ = arithmetic_.guard(arithmetic_.add(u, v));
+ //                                *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
+
+ //                                u = *x;
+ //                                v = *y;
+ //                                *x++ = arithmetic_.guard(arithmetic_.add(u, v));
+ //                                *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
+
+ //                                u = *x;
+ //                                v = *y;
+ //                                *x++ = arithmetic_.guard(arithmetic_.add(u, v));
+ //                                *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
+ //                            }
+ //                            offset += gap << 1;
+ //                        }
+ //                    }
+ //                    gap <<= 1;
+ //                }
+
+ //                if (scalar != nullptr)
+ //                {
+ //                    r = *++roots;
+ //                    MultiplyUIntModOperand scaled_r = arithmetic_.mul_root_scalar(r, *scalar);
+ //                    x = values;
+ //                    y = x + gap;
+ //                    if (gap < 4)
+ //                    {
+ //                        for (std::size_t j = 0; j < gap; j += 4)
+ //                        {
+ //                            u = arithmetic_.guard(*x);
+ //                            v = *y;
+ //                            *x++ = arithmetic_.mul_scalar(arithmetic_.guard(arithmetic_.add(u, v)), *scalar);
+ //                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), scaled_r);
+ //                        }
+ //                    }
+ //                    else
+ //                    {
+ //                        for (std::size_t j = 0; j < gap; j += 4)
+ //                        {
+ //                            u = arithmetic_.guard(*x);
+ //                            v = *y;
+ //                            *x++ = arithmetic_.mul_scalar(arithmetic_.guard(arithmetic_.add(u, v)), *scalar);
+ //                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), scaled_r);
+
+ //                            u = arithmetic_.guard(*x);
+ //                            v = *y;
+ //                            *x++ = arithmetic_.mul_scalar(arithmetic_.guard(arithmetic_.add(u, v)), *scalar);
+ //                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), scaled_r);
+
+ //                            u = arithmetic_.guard(*x);
+ //                            v = *y;
+ //                            *x++ = arithmetic_.mul_scalar(arithmetic_.guard(arithmetic_.add(u, v)), *scalar);
+ //                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), scaled_r);
+
+ //                            u = arithmetic_.guard(*x);
+ //                            v = *y;
+ //                            *x++ = arithmetic_.mul_scalar(arithmetic_.guard(arithmetic_.add(u, v)), *scalar);
+ //                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), scaled_r);
+ //                        }
+ //                    }
+ //                }
+ //                else
+ //                {
+ //                    r = *++roots;
+ //                    x = values;
+ //                    y = x + gap;
+ //                    if (gap < 4)
+ //                    {
+ //                        for (std::size_t j = 0; j < gap; j += 4)
+ //                        {
+ //                            u = *x;
+ //                            v = *y;
+ //                            *x++ = arithmetic_.guard(arithmetic_.add(u, v));
+ //                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
+ //                        }
+ //                    }
+ //                    else
+ //                    {
+ //                        for (std::size_t j = 0; j < gap; j += 4)
+ //                        {
+ //                            u = *x;
+ //                            v = *y;
+ //                            *x++ = arithmetic_.guard(arithmetic_.add(u, v));
+ //                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
+
+ //                            u = *x;
+ //                            v = *y;
+ //                            *x++ = arithmetic_.guard(arithmetic_.add(u, v));
+ //                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
+
+ //                            u = *x;
+ //                            v = *y;
+ //                            *x++ = arithmetic_.guard(arithmetic_.add(u, v));
+ //                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
+
+ //                            u = *x;
+ //                            v = *y;
+ //                            *x++ = arithmetic_.guard(arithmetic_.add(u, v));
+ //                            *y++ = arithmetic_.mul_root(arithmetic_.sub(u, v), r);
+ //                        }
+ //                    }
+ //                }
+ //            }

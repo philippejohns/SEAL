@@ -116,6 +116,12 @@ namespace seal
                 return root_powers_.get();
             }
 
+            //added for device pointer
+            SEAL_NODISCARD inline const MultiplyUIntModOperand *get_from_root_powers_device() const
+            {
+                return root_powers_device;
+            }
+
             SEAL_NODISCARD inline const MultiplyUIntModOperand *get_from_inv_root_powers() const
             {
                 return inv_root_powers_.get();
@@ -192,6 +198,9 @@ namespace seal
 
             // Holds 1~(n-1)-th powers of root_ in bit-reversed order, the 0-th power is left unset.
             Pointer<MultiplyUIntModOperand> root_powers_;
+
+            //above roots but allocated on device
+            MultiplyUIntModOperand *root_powers_device;
 
             // Holds 1~(n-1)-th powers of inv_root_ in scrambled order, the 0-th power is left unset.
             Pointer<MultiplyUIntModOperand> inv_root_powers_;
