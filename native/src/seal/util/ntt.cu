@@ -10,6 +10,10 @@
 
 using namespace std;
 
+//THIS IS A BAD IDEA
+std::uint64_t *values_device = nullptr;
+
+
 namespace seal
 {
     namespace util
@@ -84,6 +88,10 @@ namespace seal
 
             cudaMalloc(&root_powers_device, n * sizeof(MultiplyUIntModOperand)); //note: this doesnt get destroyed yet...
             cudaMemcpy(root_powers_device, root_powers_.get(), n * sizeof(MultiplyUIntModOperand), cudaMemcpyHostToDevice); 
+
+            //THIS IS AN PART OF THE GLOBALLY BAD IDEA
+            if (values_device == nullptr)
+                cudaMalloc(&values_device, n * sizeof(std::uint64_t));
         }
 
         class NTTTablesCreateIter
@@ -215,7 +223,7 @@ namespace seal
             //}
         }
 
-        __global__ void transform_to_rev_kernel2(ARITH_SH arithmetic_,
+        __global__ void transform_to_rev_kernel2(const ARITH_SH arithmetic_,
                 std::uint64_t * __restrict__ values, const MultiplyUIntModOperand * __restrict__ roots, size_t gap, size_t m)
         {
             // registers to hold temporary values
@@ -259,10 +267,10 @@ namespace seal
 
             size_t n = size_t(1) << log_n;
 
-            std::uint64_t *values_device;
-            MultiplyUIntModOperand *roots_device;
+           // std::uint64_t *values_device;
+            //MultiplyUIntModOperand *roots_device;
 
-            cudaMalloc(&values_device, n * sizeof(std::uint64_t));
+            //cudaMalloc(&values_device, n * sizeof(std::uint64_t));
             //cudaMalloc(&roots_device, n * sizeof(MultiplyUIntModOperand));
 
             cudaMemcpy(values_device, operand.ptr(), n * sizeof(std::uint64_t), cudaMemcpyHostToDevice);
@@ -284,10 +292,11 @@ namespace seal
                 transform_to_rev_kernel2<<<m, gap>>>(tables.ntt_handler().arithmetic_, values_device, tables.get_from_root_powers_device(), gap, m);
                 gap >>= 1;
             }
+            //cudaDeviceSynchronize();
 
             cudaMemcpy(operand.ptr(), values_device, n * sizeof(std::uint64_t), cudaMemcpyDeviceToHost);
-            cudaFree(values_device);
-           // cudaFree(roots_device);
+            //cudaFree(values_device);
+            //cudaFree(roots_device);
 
         }
 
