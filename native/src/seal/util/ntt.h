@@ -51,6 +51,7 @@ namespace seal
                 return multiply_uint_mod_lazy(a, r, modulus_);
             }
 
+
 #ifdef __CUDA_ARCH__
             __host__ __device__
 #endif
